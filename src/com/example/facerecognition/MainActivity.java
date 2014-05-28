@@ -1,16 +1,12 @@
 package com.example.facerecognition;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.app.Activity;
 import android.graphics.Bitmap;
-import android.graphics.Matrix;
 import android.hardware.Camera;
 import android.hardware.Camera.PictureCallback;
 import android.os.Bundle;
@@ -19,6 +15,7 @@ import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 
 import com.facepp.error.FaceppParseException;
 import com.facepp.http.HttpRequests;
@@ -30,6 +27,8 @@ public class MainActivity extends Activity {
     private CameraPreview mPreview;
     private Button button_capture;
     private Bitmap img = null;
+    private TextView textView;
+    private String personInfo="";
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -45,6 +44,7 @@ public class MainActivity extends Activity {
         preview.addView(mPreview);
         
         button_capture = (Button) findViewById(R.id.button_capture);
+        textView = (TextView) findViewById(R.id.textView1);
 		
         button_capture.setOnClickListener(new OnClickListener() {
 			public void onClick(View v) {
@@ -82,16 +82,120 @@ public class MainActivity extends Activity {
 	    @Override
 	    public void onPictureTaken(byte[] data, Camera camera) {
 
-	    	String fileName = String.format("/sdcard/camtest/%d.jpg", System.currentTimeMillis());
-	        File pictureFile = new File(fileName);
+//	    	String fileName = String.format("/sdcard/camtest/%d.jpg", System.currentTimeMillis());
+//	        File pictureFile = new File(fileName);
+//	        
+//	        if (pictureFile == null){
+//	            Log.d(TAG, "Error creating media file, check storage permissions");
+//	            return;
+//	        }
 	        
-	        if (pictureFile == null){
-	            Log.d(TAG, "Error creating media file, check storage permissions");
-	            return;
-	        }
+//	        InputStream is = new ByteArrayInputStream(data);
+//	        
+//	        Options options = new Options();
+//	        options.inSampleSize = Math.max(1, (int)Math.ceil(Math.max((double)options.outWidth / 1024f, (double)options.outHeight / 1024f)));
+//			options.inJustDecodeBounds = false;
+//	        img = BitmapFactory.decodeStream(is, null, options);
 
 	        try {
-	        	new FaceppDetect().detect(data);
+	        	FaceppDetect faceppDetect = new FaceppDetect();
+	        	
+	        	faceppDetect.setDetectCallback(new DetectCallback() {
+					
+					public void detectResult(JSONObject rst) {
+						//Log.v(TAG, rst.toString());
+						
+						//use the red paint
+//						Paint paint = new Paint();
+//						paint.setColor(Color.RED);
+//						paint.setStrokeWidth(Math.max(img.getWidth(), img.getHeight()) / 100f);
+//
+//						//create a new canvas
+//						Bitmap bitmap = Bitmap.createBitmap(img.getWidth(), img.getHeight(), img.getConfig());
+//						Canvas canvas = new Canvas(bitmap);
+//						canvas.drawBitmap(img, new Matrix(), null);
+//						
+						
+						try {
+							//find out all faces
+							final int count = rst.getJSONArray("face").length();
+							String person = "";
+							
+							for (int i = 0; i < count; ++i) {
+								//get the center point
+								String age = rst.getJSONArray("face").getJSONObject(i)
+										.getJSONObject("attribute").getJSONObject("age").getString("value");
+								String range = rst.getJSONArray("face").getJSONObject(i)
+										.getJSONObject("attribute").getJSONObject("age").getString("range");
+								String gender = rst.getJSONArray("face").getJSONObject(i)
+										.getJSONObject("attribute").getJSONObject("gender").getString("value");
+								String race = rst.getJSONArray("face").getJSONObject(i)
+										.getJSONObject("attribute").getJSONObject("race").getString("value");
+								float smilingValue = (float)rst.getJSONArray("face").getJSONObject(i)
+										.getJSONObject("attribute").getJSONObject("smiling").getDouble("value");
+								
+								String smiling = "Yes";
+								
+								if(Double.compare(smilingValue, 5.00) < 0) {
+									smiling = "No";
+								}
+								
+								//get face size
+								//w = (float)rst.getJSONArray("face").getJSONObject(i)
+								//		.getJSONObject("position").getDouble("width");
+								//h = (float)rst.getJSONArray("face").getJSONObject(i)
+								//		.getJSONObject("position").getDouble("height");
+								
+								//change percent value to the real size
+								//x = x / 100 * img.getWidth();
+								//w = w / 100 * img.getWidth() * 0.7f;
+								//y = y / 100 * img.getHeight();
+								//h = h / 100 * img.getHeight() * 0.7f;
+
+								person += "Age: " + age + "(+/-" +range + "), Gender: " + gender + 
+										", Race: " + race + ", \r\nSmiling: " + smiling;
+							}
+							
+							//save new image
+							//img = bitmap;
+							
+							personInfo = person;
+							
+							MainActivity.this.runOnUiThread(new Runnable() {
+								
+								public void run() {
+									
+									//show the image
+									//imageView.setImageBitmap(img);
+									//textView.setTextSize(40);
+								    //textView.setText(String.valueOf(x));
+								    //textView.setText(String.valueOf(y));
+
+									textView.setText(personInfo);
+									
+								}
+							});
+							
+							mCamera.stopPreview();
+							mCamera.startPreview();
+							
+						} catch (JSONException e) {
+							e.printStackTrace();
+							MainActivity.this.runOnUiThread(new Runnable() {
+								public void run() {
+									textView.setText("Error to connect remote server!");
+								}
+							});
+							
+							mCamera.stopPreview();
+							mCamera.startPreview();
+						}
+					}
+				});
+	        	
+	        	textView.setText("Waiting......");
+	        	
+	        	faceppDetect.detect(data);
 	        	
 	            //FileOutputStream fos = new FileOutputStream(pictureFile);
 	            //fos.write(data);
@@ -117,7 +221,7 @@ public class MainActivity extends Activity {
     		new Thread(new Runnable() {
 				
 				public void run() {
-					HttpRequests httpRequests = new HttpRequests("f943775cc90883a683022dccceacfbed", "7OaYYHydlmvUyf1bJaR8Cp0sMewt1VBK", false, false);
+					HttpRequests httpRequests = new HttpRequests("4480afa9b8b364e30ba03819f3e9eff5", "Pz9VFT8AP3g_Pz8_dz84cRY_bz8_Pz8M", true, false);
 		    		//Log.v(TAG, "image size : " + img.getWidth() + " " + img.getHeight());
 		    		
 //		    		ByteArrayOutputStream stream = new ByteArrayOutputStream();
